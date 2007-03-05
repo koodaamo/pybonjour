@@ -28,12 +28,19 @@
 
 import ctypes
 import socket
+import sys
 
-# FIXME: need to use windll on Windows
-_libdnssd = ctypes.cdll.LoadLibrary('libSystem.B.dylib')
 
-# FIXME: need to use WINFUNCTYPE on Windows
-_Callback = ctypes.CFUNCTYPE
+if sys.platform == 'win32':
+    _libdnssd = ctypes.windll.dnssd
+    _Callback = ctypes.WINFUNCTYPE
+else:
+    if sys.platform == 'darwin':
+	_libdnssd = 'libSystem.B.dylib'
+    else:
+	_libdnssd = 'libdns_sd.so'
+    _libdnssd = ctypes.cdll.LoadLibrary(_libdnssd)
+    _Callback = ctypes.CFUNCTYPE
 
 
 
