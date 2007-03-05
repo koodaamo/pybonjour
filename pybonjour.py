@@ -26,12 +26,23 @@
 
 
 
+#
+# NOTE:
+#
+# To use this module with Python 2.4, you'll need to install ctypes
+# 1.0.1 or later.  Starting with Python 2.5, ctypes is part of the
+# standard library, so no additional software is required.
+#
+
+
 import ctypes
+import os
 import socket
 import sys
 
 
 if sys.platform == 'win32':
+    # Need to use the stdcall variants
     _libdnssd = ctypes.windll.dnssd
     _Callback = ctypes.WINFUNCTYPE
 else:
@@ -39,6 +50,9 @@ else:
 	_libdnssd = 'libSystem.B.dylib'
     else:
 	_libdnssd = 'libdns_sd.so'
+	# If libdns_sd is actually Avahi's Bonjour compatibility
+	# layer, silence its annoying warning messages
+	os.environ['AVAHI_COMPAT_NOWARN'] = '1'
     _libdnssd = ctypes.cdll.LoadLibrary(_libdnssd)
     _Callback = ctypes.CFUNCTYPE
 
@@ -805,9 +819,11 @@ if __name__ == '__main__':
 				   callBack=enumerate_domains_callback)
 
     while not enumEvent.isSet():
-	ready = select.select([enum_sdRef], [], [])
-	if enum_sdRef in ready[0]:
-	    DNSServiceProcessResult(enum_sdRef)
+	ready = select.select([enum_sdRef], [], [], 2)
+	if enum_sdRef not in ready[0]:
+	    print 'Domain enumeration timed out'
+	    break
+	DNSServiceProcessResult(enum_sdRef)
 
     enum_sdRef.close()
 
