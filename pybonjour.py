@@ -35,6 +35,13 @@
 #
 
 
+"""
+
+Pure-Python bindings for Apple's Bonjour library
+
+"""
+
+
 import ctypes
 import os
 import socket
@@ -593,7 +600,7 @@ class DNSServiceRef(DNSRecordRef):
 
 class _NoDefaultType(object):
     def __repr__(self):
-	return '<NO DEFAULT VALUE>'
+	return '<NO DEFAULT>'
 
 _NO_DEFAULT = _NoDefaultType()
 
