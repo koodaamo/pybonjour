@@ -919,3 +919,6 @@ if __name__ == '__main__':
 
     browse_sdRef.close()
     reg_sdRef.close()
+
+    if sys.platform == 'win32':
+	raw_input('Press any key to exit: ')
