@@ -1021,83 +1021,123 @@ def DNSServiceConstructFullName(
 if __name__ == '__main__':
     import select
     import threading
+    import unittest
 
-    enumEvent = threading.Event()
 
-    def enumerate_domains_callback(sdRef, flags, interfaceIndex, errorCode,
-				   replyDomain):
-	print 'Available domain:', replyDomain
-	if not (flags & kDNSServiceFlagsMoreComing):
-	    enumEvent.set()
+    class TestPyBonjour(unittest.TestCase):
 
-    enum_sdRef = \
-	DNSServiceEnumerateDomains(flags=kDNSServiceFlagsRegistrationDomains,
-				   callBack=enumerate_domains_callback)
+	service_name = 'TestService'
+	regtype = '_test._tcp.'
+	port = 1111
+	fullname = 'TestService._test._tcp.local.'
+	timeout = 2
 
-    while not enumEvent.isSet():
-	ready = select.select([enum_sdRef], [], [], 2)
-	if enum_sdRef not in ready[0]:
-	    print 'Domain enumeration timed out'
-	    break
-	DNSServiceProcessResult(enum_sdRef)
+	def wait_on_event(self, sdRef, event):
+	    while not event.isSet():
+		ready = select.select([sdRef], [], [], self.timeout)
+		self.assert_(sdRef in ready[0], 'operation timed out')
+		DNSServiceProcessResult(sdRef)
 
-    enum_sdRef.close()
+	def test_enumerate_domains(self):
+	    done = threading.Event()
 
-    name = "MyService"
-    regtype = "_test._tcp"
-    port = 1111
+	    def cb(_sdRef, flags, interfaceIndex, errorCode, replyDomain):
+		self.assertEqual(errorCode, kDNSServiceErr_NoError)
+		self.assertEqual(_sdRef, sdRef)
+		self.assert_(isinstance(replyDomain, unicode))
+		if not (flags & kDNSServiceFlagsMoreComing):
+		    done.set()
 
-    registerEvent = threading.Event()
+	    sdRef = \
+		DNSServiceEnumerateDomains(kDNSServiceFlagsRegistrationDomains,
+					   callBack=cb)
 
-    def register_callback(sdRef, flags, errorCode, name, regtype, domain):
-	print 'Service registered as %s' % name
-	registerEvent.set()
+	    try:
+		self.wait_on_event(sdRef, done)
+	    finally:
+		sdRef.close()
 
-    reg_sdRef = DNSServiceRegister(name=name, regtype=regtype, port=port,
-				   callBack=register_callback)
+	def test_register_browse_resolve(self):
+	    register_done = threading.Event()
+	    browse_done = threading.Event()
+	    resolve_done = threading.Event()
 
-    while not registerEvent.isSet():
-	ready = select.select([reg_sdRef], [], [])
-	if reg_sdRef in ready[0]:
-	    DNSServiceProcessResult(reg_sdRef)
+	    def register_cb(sdRef, flags, errorCode, name, regtype, domain):
+		self.assertEqual(errorCode, kDNSServiceErr_NoError)
+		self.assertEqual(sdRef, register_sdRef)
+		self.assert_(isinstance(name, unicode))
+		self.assertEqual(name, self.service_name)
+		self.assert_(isinstance(regtype, unicode))
+		self.assertEqual(regtype, self.regtype)
+		self.assert_(isinstance(domain, unicode))
+		register_done.set()
 
-    browseEvent = threading.Event()
+	    def browse_cb(sdRef, flags, interfaceIndex, errorCode, serviceName,
+			  regtype, replyDomain):
+		self.assertEqual(errorCode, kDNSServiceErr_NoError)
+		self.assertEqual(sdRef, browse_sdRef)
+		self.assert_(flags & kDNSServiceFlagsAdd)
+		self.assert_(isinstance(serviceName, unicode))
+		self.assertEqual(serviceName, self.service_name)
+		self.assert_(isinstance(regtype, unicode))
+		self.assertEqual(regtype, self.regtype)
+		self.assert_(isinstance(replyDomain, unicode))
 
-    def browse_callback(sdRef, flags, interfaceIndex, errorCode, serviceName,
-			regtype, replyDomain):
-	if (serviceName == name) and (flags & kDNSServiceFlagsAdd):
-	    print 'Found service %s; resolving' % serviceName
+		def resolve_cb(sdRef, flags, interfaceIndex, errorCode,
+			       fullname, hosttarget, port, txtRecord):
+		    self.assertEqual(errorCode, kDNSServiceErr_NoError)
+		    self.assertEqual(sdRef, resolve_sdRef)
+		    self.assert_(isinstance(fullname, unicode))
+		    self.assertEqual(fullname, self.fullname)
+		    self.assert_(isinstance(hosttarget, unicode))
+		    self.assertEqual(port, self.port)
+		    self.assert_(isinstance(txtRecord, str))
+		    self.assert_(len(txtRecord) > 0)
+		    resolve_done.set()
 
-	    resolveEvent = threading.Event()
+		resolve_sdRef = DNSServiceResolve(0, interfaceIndex,
+						  serviceName, regtype,
+						  replyDomain, resolve_cb)
 
-	    def resolve_callback(sdRef, flags, interfaceIndex, errorCode,
-				 fullname, hosttarget, port, txtRecord):
-		print ('Resolved service %s at %s:%d' % 
-		       (fullname, hosttarget, port))
-		print "txtRecord = %r" % txtRecord
-		resolveEvent.set()
+		try:
+		    self.wait_on_event(resolve_sdRef, resolve_done)
+		finally:
+		    resolve_sdRef.close()
 
-	    resolve_sdRef = DNSServiceResolve(0, interfaceIndex, serviceName,
-					      regtype, replyDomain,
-					      resolve_callback)
+		browse_done.set()
 
-	    while not resolveEvent.isSet():
-		ready = select.select([resolve_sdRef], [], [])
-		if resolve_sdRef in ready[0]:
-		    DNSServiceProcessResult(resolve_sdRef)
+	    register_sdRef = DNSServiceRegister(name=self.service_name,
+						regtype=self.regtype,
+						port=self.port,
+						callBack=register_cb)
 
-	    browseEvent.set()
-	    resolve_sdRef.close()
+	    try:
+		self.wait_on_event(register_sdRef, register_done)
 
-    browse_sdRef = DNSServiceBrowse(regtype=regtype, callBack=browse_callback)
+		browse_sdRef = DNSServiceBrowse(regtype=self.regtype,
+						callBack=browse_cb)
 
-    while not browseEvent.isSet():
-	ready = select.select([browse_sdRef], [], [])
-	if browse_sdRef in ready[0]:
-	    DNSServiceProcessResult(browse_sdRef)
+		try:
+		    self.wait_on_event(browse_sdRef, browse_done)
+		finally:
+		    browse_sdRef.close()
+	    finally:
+		register_sdRef.close()
 
-    browse_sdRef.close()
-    reg_sdRef.close()
+	def test_construct_fullname(self):
+	    self.assertRaises(ValueError, DNSServiceConstructFullName, None,
+			      None)
+	    self.assertRaises(ctypes.ArgumentError, DNSServiceConstructFullName,
+			      None, None, None)
+
+	    fullname = DNSServiceConstructFullName(self.service_name,
+						   self.regtype, 'local.')
+
+	    self.assert_(isinstance(fullname, unicode))
+	    self.assertEqual(fullname, self.fullname)
+
+
+    unittest.main()
 
     if sys.platform == 'win32':
 	raw_input('Press enter to exit')
