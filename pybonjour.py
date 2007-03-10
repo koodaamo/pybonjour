@@ -306,6 +306,15 @@ class DNSRecordRef(ctypes.c_void_p):
 	return (self.value is not None)
 
 
+class _DNSRecordRef_or_null(DNSRecordRef):
+
+    @classmethod
+    def from_param(cls, obj):
+	if obj is None:
+	    return obj
+	return DNSRecordRef.from_param(obj)
+
+
 class DNSServiceRef(DNSRecordRef):
 
     def __init__(self, *args, **kwargs):
@@ -521,7 +530,7 @@ def _create_function_bindings():
 	    NO_OUTPARAM,
 	    (
 		DNSServiceRef,			# sdRef
-		DNSRecordRef,			# RecordRef
+		_DNSRecordRef_or_null,		# RecordRef
 		_DNSServiceFlags,		# flags
 		ctypes.c_uint16,		# rdlen
 		ctypes.c_void_p,		# rdata
@@ -772,6 +781,64 @@ def DNSServiceRegister(
 			       None)
 
 
+def DNSServiceAddRecord(
+    sdRef,
+    flags = 0,
+    rrtype = _NO_DEFAULT,
+    rdata = _NO_DEFAULT,
+    ttl = 0,
+    ):
+
+    _NO_DEFAULT.check(rrtype)
+    _NO_DEFAULT.check(rdata)
+
+    rdlen, rdata = _string_to_length_and_void_p(rdata)
+
+    RecordRef = _DNSServiceAddRecord(sdRef,
+				     flags,
+				     rrtype,
+				     rdlen,
+				     rdata,
+				     ttl)
+
+    sdRef._add_record_ref(RecordRef)
+
+    return RecordRef
+
+
+def DNSServiceUpdateRecord(
+    sdRef,
+    RecordRef = None,
+    flags = 0,
+    rdata = _NO_DEFAULT,
+    ttl = 0,
+    ):
+
+    _NO_DEFAULT.check(rdata)
+
+    rdlen, rdata = _string_to_length_and_void_p(rdata)
+
+    _DNSServiceUpdateRecord(sdRef,
+			    RecordRef,
+			    flags,
+			    rdlen,
+			    rdata,
+			    ttl)
+
+
+def DNSServiceRemoveRecord(
+    sdRef,
+    RecordRef,
+    flags = 0,
+    ):
+
+    _DNSServiceRemoveRecord(sdRef,
+			    RecordRef,
+			    flags)
+
+    RecordRef._invalidate()
+
+
 def DNSServiceBrowse(
     flags = 0,
     interfaceIndex = kDNSServiceInterfaceIndexAny,
@@ -828,6 +895,104 @@ def DNSServiceResolve(
 			      domain,
 			      _callback,
 			      None)
+
+
+def DNSServiceCreateConnection():
+
+    return _DNSServiceCreateConnection()
+
+
+def DNSServiceRegisterRecord(
+    sdRef,
+    flags,
+    interfaceIndex = kDNSServiceInterfaceIndexAny,
+    fullname = _NO_DEFAULT,
+    rrtype = _NO_DEFAULT,
+    rrclass = kDNSServiceClass_IN,
+    rdata = _NO_DEFAULT,
+    ttl = 0,
+    callBack = None,
+    ):
+
+    _NO_DEFAULT.check(fullname)
+    _NO_DEFAULT.check(rrtype)
+    _NO_DEFAULT.check(rdata)
+
+    rdlen, rdata = _string_to_length_and_void_p(rdata)
+
+    @_DNSServiceRegisterRecordReply
+    def _callback(sdRef, RecordRef, flags, errorCode, context):
+	if callBack is not None:
+	    callBack(sdRef, RecordRef, flags, errorCode)
+
+    RecordRef = _DNSServiceRegisterRecord(sdRef,
+					  flags,
+					  interfaceIndex,
+					  fullname,
+					  rrtype,
+					  rrclass,
+					  rdlen,
+					  rdata,
+					  ttl,
+					  _callback,
+					  None)
+
+    sdRef._add_record_ref(RecordRef)
+
+    return RecordRef
+
+
+def DNSServiceQueryRecord(
+    flags = 0,
+    interfaceIndex = kDNSServiceInterfaceIndexAny,
+    fullname = _NO_DEFAULT,
+    rrtype = _NO_DEFAULT,
+    rrclass = kDNSServiceClass_IN,
+    callBack = None,
+    ):
+
+    _NO_DEFAULT.check(fullname)
+    _NO_DEFAULT.check(rrtype)
+
+    @_DNSServiceQueryRecordReply
+    def _callback(sdRef, flags, interfaceIndex, errorCode, fullname, rrtype,
+		  rrclass, rdlen, rdata, ttl, context):
+	if callBack is not None:
+	    rdata = _length_and_void_p_to_string(rdlen, rdata)
+	    callBack(sdRef, flags, interfaceIndex, errorCode, fullname.decode(),
+		     rrtype, rrclass, rdata, ttl)
+
+    return _DNSServiceQueryRecord(flags,
+				  interfaceIndex,
+				  fullname,
+				  rrtype,
+				  rrclass,
+				  _callback,
+				  None)
+
+
+def DNSServiceReconfirmRecord(
+    flags = 0,
+    interfaceIndex = kDNSServiceInterfaceIndexAny,
+    fullname = _NO_DEFAULT,
+    rrtype = _NO_DEFAULT,
+    rrclass = kDNSServiceClass_IN,
+    rdata = _NO_DEFAULT,
+    ):
+
+    _NO_DEFAULT.check(fullname)
+    _NO_DEFAULT.check(rrtype)
+    _NO_DEFAULT.check(rdata)
+
+    rdlen, rdata = _string_to_length_and_void_p(rdata)
+
+    _DNSServiceReconfirmRecord(flags,
+			       interfaceIndex,
+			       fullname,
+			       rrtype,
+			       rrclass,
+			       rdlen,
+			       rdata)
 
 
 def DNSServiceConstructFullName(
