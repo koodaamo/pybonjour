@@ -1012,7 +1012,7 @@ def DNSServiceConstructFullName(
 
 ################################################################################
 #
-# Test routine
+# Unit tests
 #
 ################################################################################
 
@@ -1021,6 +1021,7 @@ def DNSServiceConstructFullName(
 if __name__ == '__main__':
     import select
     import threading
+    import time
     import unittest
 
 
@@ -1031,6 +1032,21 @@ if __name__ == '__main__':
 	port = 1111
 	fullname = 'TestService._test._tcp.local.'
 	timeout = 2
+
+	def test_construct_fullname(self):
+	    # Check error handling
+	    self.assertRaises(ValueError, DNSServiceConstructFullName, None,
+			      None)
+	    self.assertRaises(ctypes.ArgumentError, DNSServiceConstructFullName,
+			      None, None, None)
+	    self.assertRaises(BonjourError, DNSServiceConstructFullName, None,
+			      'foo', 'local.')
+
+	    fullname = DNSServiceConstructFullName(self.service_name,
+						   self.regtype, 'local.')
+
+	    self.assert_(isinstance(fullname, unicode))
+	    self.assertEqual(fullname, self.fullname)
 
 	def wait_on_event(self, sdRef, event):
 	    while not event.isSet():
@@ -1057,8 +1073,27 @@ if __name__ == '__main__':
 	    finally:
 		sdRef.close()
 
+	def register_record(self):
+	    done = threading.Event()
+
+	    def cb(_sdRef, flags, errorCode, name, regtype, domain):
+		self.assertEqual(errorCode, kDNSServiceErr_NoError)
+		self.assertEqual(_sdRef, sdRef)
+		self.assert_(isinstance(name, unicode))
+		self.assertEqual(name, self.service_name)
+		self.assert_(isinstance(regtype, unicode))
+		self.assertEqual(regtype, self.regtype)
+		self.assert_(isinstance(domain, unicode))
+		done.set()
+
+	    sdRef = DNSServiceRegister(name=self.service_name,
+				       regtype=self.regtype,
+				       port=self.port,
+				       callBack=cb)
+
+	    return done, sdRef
+
 	def test_register_browse_resolve(self):
-	    register_done = threading.Event()
 	    browse_done = threading.Event()
 	    resolve_done = threading.Event()
 
@@ -1106,10 +1141,7 @@ if __name__ == '__main__':
 
 		browse_done.set()
 
-	    register_sdRef = DNSServiceRegister(name=self.service_name,
-						regtype=self.regtype,
-						port=self.port,
-						callBack=register_cb)
+	    register_done, register_sdRef = self.register_record()
 
 	    try:
 		self.wait_on_event(register_sdRef, register_done)
@@ -1124,17 +1156,87 @@ if __name__ == '__main__':
 	    finally:
 		register_sdRef.close()
 
-	def test_construct_fullname(self):
-	    self.assertRaises(ValueError, DNSServiceConstructFullName, None,
-			      None)
-	    self.assertRaises(ctypes.ArgumentError, DNSServiceConstructFullName,
-			      None, None, None)
+	def query_record(self, rrtype, rdata):
+	    # Give record time to be updated...
+	    time.sleep(3)
 
-	    fullname = DNSServiceConstructFullName(self.service_name,
-						   self.regtype, 'local.')
+	    done = threading.Event()
 
-	    self.assert_(isinstance(fullname, unicode))
-	    self.assertEqual(fullname, self.fullname)
+	    def cb(_sdRef, flags, interfaceIndex, errorCode, fullname, _rrtype,
+		   rrclass, _rdata, ttl):
+		self.assertEqual(errorCode, kDNSServiceErr_NoError)
+		self.assertEqual(_sdRef, sdRef)
+		self.assert_(isinstance(fullname, unicode))
+		self.assertEqual(fullname, self.fullname)
+		self.assertEqual(_rrtype, rrtype)
+		self.assertEqual(rrclass, kDNSServiceClass_IN)
+		self.assert_(isinstance(_rdata, str))
+		self.assertEqual(_rdata, rdata)
+		done.set()
+
+	    sdRef = DNSServiceQueryRecord(fullname=self.fullname,
+					  rrtype=rrtype,
+					  callBack=cb)
+
+	    try:
+		self.wait_on_event(sdRef, done)
+	    finally:
+		sdRef.close()
+
+	def test_addrecord_updaterecord_removerecord(self):
+	    done, sdRef = self.register_record()
+
+	    try:
+		self.wait_on_event(sdRef, done)
+
+		RecordRef = DNSServiceAddRecord(sdRef,
+						rrtype=kDNSServiceType_SINK,
+						rdata='foo')
+		self.assert_(RecordRef.value is not None)
+		self.query_record(kDNSServiceType_SINK, 'foo')
+
+		DNSServiceUpdateRecord(sdRef, RecordRef, rdata='bar')
+		self.query_record(kDNSServiceType_SINK, 'bar')
+
+		DNSServiceRemoveRecord(sdRef, RecordRef)
+	    finally:
+		sdRef.close()
+
+	    self.assert_(RecordRef.value is None)
+
+	def test_createconnection_registerrecord_reconfirmrecord(self):
+	    done = threading.Event()
+
+	    def cb(_sdRef, _RecordRef, flags, errorCode):
+		self.assertEqual(errorCode, kDNSServiceErr_NoError)
+		self.assertEqual(_sdRef, sdRef)
+		self.assertEqual(_RecordRef, RecordRef)
+		done.set()
+
+	    sdRef = DNSServiceCreateConnection()
+
+	    try:
+		RecordRef = \
+		    DNSServiceRegisterRecord(sdRef,
+					     kDNSServiceFlagsUnique,
+					     fullname=self.fullname,
+					     rrtype=kDNSServiceType_SINK,
+					     rdata='blah',
+					     callBack=cb)
+		self.assert_(RecordRef.value is not None)
+
+		self.wait_on_event(sdRef, done)
+
+		self.query_record(kDNSServiceType_SINK, 'blah')
+
+		# FIXME:  This one always fails.  What am I doing wrong?
+		#DNSServiceReconfirmRecord(fullname=self.fullname,
+		#			  rrtype=kDNSServiceType_SINK,
+		#			  rdata='blah')
+	    finally:
+		sdRef.close()
+
+	    self.assert_(RecordRef.value is None)
 
 
     unittest.main()
