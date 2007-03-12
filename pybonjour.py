@@ -386,7 +386,7 @@ _DNSServiceResolveReply = _CFunc(
     _utf8_char_p,		# hosttarget
     ctypes.c_uint16,		# port
     ctypes.c_uint16,		# txtLen
-    ctypes.c_void_p,		# txtRecord (not NULL-terminated, so c_void_p)
+    ctypes.c_void_p,		# txtRecord (not null-terminated, so c_void_p)
     ctypes.c_void_p,		# context
     )
 
@@ -1120,10 +1120,10 @@ if __name__ == '__main__':
 
 	    fullname = DNSServiceConstructFullName(self.service_name,
 						   self.regtype, 'local.')
-	    if not fullname.endswith(u'.'):
-		fullname += u'.'
 
 	    self.assert_(isinstance(fullname, unicode))
+	    if not fullname.endswith(u'.'):
+		fullname += u'.'
 	    self.assertEqual(fullname, self.fullname)
 
 	def wait_on_event(self, sdRef, event):
