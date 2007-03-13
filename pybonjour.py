@@ -240,6 +240,7 @@ class BonjourError(Exception):
 	return args
 
     def __init__(self, errorCode):
+	self.errorCode = errorCode
 	Exception.__init__(self,
 			   (errorCode, self._errmsg.get(errorCode, 'unknown')))
 
