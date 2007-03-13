@@ -1121,6 +1121,88 @@ def DNSServiceBrowse(
     callBack = None,
     ):
 
+    """
+
+    Browse for instances of a service.
+
+      flags:
+        Currently ignored, reserved for future use.
+
+      interfaceIndex:
+        If non-zero, specifies the interface on which to browse for
+	services.  Most applications will pass
+	kDNSServiceInterfaceIndexAny (0) to browse on all available
+	interfaces.
+
+      regtype:
+        The service type being browsed for followed by the protocol,
+	separated by a dot (e.g. "_ftp._tcp").  The transport protocol
+	must be "_tcp" or "_udp".
+
+      domain:
+        If not None, specifies the domain on which to browse for
+	services.  Most applications will not specify a domain,
+	instead browsing on the default domain(s).
+
+      callBack:
+        The function to be called when an instance of the service
+	being browsed for is found, or if the call asynchronously
+	fails.  Its signature should be
+	callBack(sdRef, flags, interfaceIndex, errorCode,
+	         serviceName, regtype, replyDomain).
+
+      return value:
+        A DNSServiceRef instance.  The browse operation will run
+	indefinitely until the client terminates it by closing the
+	DNSServiceRef.
+
+    Callback Parameters:
+
+      sdRef:
+        The DNSServiceRef returned by DNSServiceBrowse().
+
+      flags:
+        Possible values are kDNSServiceFlagsMoreComing and
+        kDNSServiceFlagsAdd.
+
+      interfaceIndex:
+        The interface on which the service is advertised.  This index
+	should be passed to DNSServiceResolve() when resolving the
+	service.
+
+      errorCode:
+        Will be kDNSServiceErr_NoError (0) on success, otherwise will
+	indicate the failure that occurred.  Other parameters are
+	undefined if an error occurred.
+
+      serviceName:
+        The discovered service name.  This name should be displayed to
+	the user and stored for subsequent use in the
+	DNSServiceResolve() call.
+
+      regtype:
+        The service type, which is usually (but not always) the same
+	as was passed to DNSServiceBrowse().  One case where the
+	discovered service type may not be the same as the requested
+	service type is when using subtypes: The client may want to
+	browse for only those ftp servers that allow anonymous
+	connections.  The client will pass the string
+	"_ftp._tcp,_anon" to DNSServiceBrowse(), but the type of the
+	service that's discovered is simply "_ftp._tcp".  The regtype
+	for each discovered service instance should be stored along
+	with the name, so that it can be passed to DNSServiceResolve()
+	when the service is later resolved.
+
+      replyDomain:
+        The domain of the discovered service instance.  This may or
+	may not be the same as the domain that was passed to
+	DNSServiceBrowse().  The domain for each discovered service
+	instance should be stored along with the name, so that it can
+	be passed to DNSServiceResolve() when the service is later
+	resolved.
+
+    """
+
     _NO_DEFAULT.check(regtype)
 
     @_DNSServiceBrowseReply
@@ -1147,6 +1229,92 @@ def DNSServiceResolve(
     domain = _NO_DEFAULT,
     callBack = None,
     ):
+
+    """
+
+    Resolve a service name discovered via DNSServiceBrowse() to a
+    target host name, port number, and txt record.
+
+    Note: Applications should NOT use DNSServiceResolve() solely for
+    txt record monitoring; use DNSServiceQueryRecord() instead, as it
+    is more efficient for this task.
+
+    Note: When the desired results have been returned, the client MUST
+    terminate the resolve by closing the returned DNSServiceRef.
+
+    Note: DNSServiceResolve() behaves correctly for typical services
+    that have a single SRV record and a single TXT record.  To resolve
+    non-standard services with multiple SRV or TXT records,
+    DNSServiceQueryRecord() should be used.
+
+      flags:
+        Currently ignored, reserved for future use.
+
+      interfaceIndex:
+        The interface on which to resolve the service.  If this
+	resolve call is as a result of a currently active
+	DNSServiceBrowse() operation, then the interfaceIndex should
+	be the index reported in the browse callback.  If this resolve
+	call is using information previously saved (e.g. in a
+	preference file) for later use, then use
+	kDNSServiceInterfaceIndexAny (0), because the desired service
+	may now be reachable via a different physical interface.
+
+      name:
+        The name of the service instance to be resolved, as reported
+	to the DNSServiceBrowse() callback.
+
+      regtype:
+        The type of the service instance to be resolved, as reported
+	to the DNSServiceBrowse() callback.
+
+      domain:
+        The domain of the service instance to be resolved, as reported
+	to the DNSServiceBrowse() callback.
+
+      callBack:
+        The function to be called when a result is found, or if the
+	call asynchronously fails.  Its signature should be
+	callBack(sdRef, flags, interfaceIndex, errorCode, fullname,
+	         hosttarget, port, txtRecord).
+
+      return value:
+        A DNSServiceRef instance.  The resolve operation will run
+	indefinitely until the client terminates it by closing the
+	DNSServiceRef.
+
+    Callback Parameters:
+
+      sdRef:
+        The DNSServiceRef returned by DNSServiceResolve().
+
+      flags:
+        Currently unused, reserved for future use.
+
+      interfaceIndex:
+        The interface on which the service was resolved.
+
+      errorCode:
+        Will be kDNSServiceErr_NoError (0) on success, otherwise will
+	indicate the failure that occurred.  Other parameters are
+	undefined if an error occurred.
+
+      fullname:
+        The full service domain name, in the form
+        <servicename>.<protocol>.<domain>.
+
+      hosttarget:
+        The target hostname of the machine providing the service.
+
+      port:
+        The port, in host (not network) byte order, on which
+        connections are accepted for this service.
+
+      txtRecord:
+        A string containing the service's primary txt record, in
+        standard txt record format.
+
+    """
 
     _NO_DEFAULT.check(interfaceIndex)
     _NO_DEFAULT.check(name)
