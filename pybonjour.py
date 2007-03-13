@@ -764,9 +764,8 @@ def DNSServiceEnumerateDomains(
 
       interfaceIndex:
         If non-zero, specifies the interface on which to look for
-	domains.  (The index for a given interface is determined via
-	the if_nametoindex() family of calls.)  Most applications will
-	pass kDNSServiceInterfaceIndexAny to enumerate domains on all
+	domains.  Most applications will pass
+	kDNSServiceInterfaceIndexAny (0) to enumerate domains on all
 	interfaces.
 
       callBack:
@@ -780,7 +779,7 @@ def DNSServiceEnumerateDomains(
     Callback Parameters:
 
       sdRef:
-        The DNSServiceRef initialized by DNSServiceEnumerateDomains().
+        The DNSServiceRef returned by DNSServiceEnumerateDomains().
 
       flags:
         Possible values are:
@@ -789,14 +788,12 @@ def DNSServiceEnumerateDomains(
 	  kDNSServiceFlagsDefault
 
       interfaceIndex:
-        Specifies the interface on which the domain exists.  (The
-        index for a given interface is determined via the
-        if_nametoindex() family of calls.)
+        Specifies the interface on which the domain exists.
 
       errorCode:
-        Will be kDNSServiceErr_NoError on success, otherwise indicates
-	the failure that occurred (in which case other parameters are
-	undefined).
+        Will be kDNSServiceErr_NoError (0) on success, otherwise
+	indicates the failure that occurred (in which case other
+	parameters are undefined).
 
       replyDomain:
         The name of the domain.
@@ -827,6 +824,116 @@ def DNSServiceRegister(
     txtRecord = '',
     callBack = None,
     ):
+
+    """
+
+    Register a service that is discovered via DNSServiceBrowse() and
+    DNSServiceResolve() calls.
+
+      flags:
+        Indicates the renaming behavior on name conflict.  Most
+	applications will pass 0.
+
+      interfaceIndex:
+        If non-zero, specifies the interface on which to register the
+	service.  Most applications will pass
+	kDNSServiceInterfaceIndexAny (0) to register on all available
+	interfaces.
+
+      name:
+        If not None, specifies the service name to be registered.
+	Most applications will not specify a name, in which case the
+	computer name is used.  (This name is communicated to the
+	client via the callback.)  If a name is specified, it must be
+	1-63 bytes of UTF-8 text.  If the name is longer than 63
+	bytes, it will be automatically truncated to a legal length,
+	unless the flag kDNSServiceFlagsNoAutoRename is set, in which
+	case a BonjourError exception will be thrown.
+
+      regtype:
+        The service type followed by the protocol, separated by a dot
+	(e.g. "_ftp._tcp"). The service type must be an underscore,
+	followed by 1-14 characters, which may be letters, digits, or
+	hyphens.  The transport protocol must be "_tcp" or "_udp". New
+	service types should be registered at
+	<http://www.dns-sd.org/ServiceTypes.html>.
+
+      domain:
+        If not None, specifies the domain on which to advertise the
+	service.  Most applications will not specify a domain, instead
+	automatically registering in the default domain(s).
+
+      host:
+        If not None, specifies the SRV target host name.  Most
+	applications will not specify a host, instead automatically
+	using the machine's default host name(s).  Note that
+	specifying a host name does NOT create an address record for
+	that host; the application is responsible for ensuring that
+	the appropriate address record exists, or creating it via
+	DNSServiceRegisterRecord().
+
+      port:
+        The port, in host (not network) byte order, on which the
+	service accepts connections.  Pass 0 for a "placeholder"
+	service (i.e. a service that will not be discovered by
+	browsing, but will cause a name conflict if another client
+	tries to register that same name).  Most clients will not use
+	placeholder services.
+
+      txtRecord:
+        The TXT record rdata.  If not None, txtRecord MUST be a string
+	containing a properly formatted DNS TXT record, i.e.
+	<length	byte> <data> <length byte> <data> ...
+
+      callBack:
+        The function to be called when the registration completes or
+	asynchronously fails.  Its signature should be
+	callBack(sdRef, flags, errorCode, name, regtype, domain).
+	The client MAY pass None for the callback, in which case the
+	client will NOT be notified of the default values picked on
+	its behalf, and the client will NOT be notified of any
+	asynchronous errors (e.g. out of memory errors, etc.) that may
+	prevent the registration of the service.  The client may NOT
+	pass the flag kDNSServiceFlagsNoAutoRename if the callback is
+	None.  The client may still deregister the service at any time
+	by closing the returned DNSServiceRef.
+
+      return value:
+        A DNSServiceRef instance.  The registration will remain active
+	indefinitely until the client terminates it by closing the
+	DNSServiceRef.
+
+    Callback Parameters:
+
+      sdRef:
+        The DNSServiceRef returned by DNSServiceRegister().
+
+      flags:
+        Currently unused, reserved for future use.
+
+      errorCode:
+        Will be kDNSServiceErr_NoError on success, otherwise will
+	indicate the failure that occurred (including name conflicts,
+	if the kDNSServiceFlagsNoAutoRename flag was used when
+	registering).  Other parameters are undefined if an error
+	occurred.
+
+      name:
+        The service name registered.  (If the application did not
+	specify a name in DNSServiceRegister(), this indicates what
+	name was automatically chosen.)
+
+      regtype:
+        The type of service registered, as it was passed to the
+        callout.
+
+      domain:
+        The domain on which the service was registered.  (If the
+	application did not specify a domain in DNSServiceRegister(),
+	this indicates the default domain on which the service was
+	registered.)
+
+    """
 
     _NO_DEFAULT.check(regtype)
     _NO_DEFAULT.check(port)
@@ -865,6 +972,47 @@ def DNSServiceAddRecord(
     ttl = 0,
     ):
 
+    """
+
+    Add a record to a registered service.  The name of the record will
+    be the same as the registered service's name.  The record can
+    later be updated or deregistered by passing the DNSRecordRef
+    returned by this function to DNSServiceUpdateRecord() or
+    DNSServiceRemoveRecord().
+
+    Note that DNSServiceAddRecord/UpdateRecord/RemoveRecord are NOT
+    thread-safe with respect to a single DNSServiceRef.  If you plan
+    to have multiple threads in your program simultaneously add,
+    update, or remove records from the same DNSServiceRef, then it's
+    the caller's responsibility to use a lock or take similar
+    appropriate precautions to serialize those calls.
+
+      sdRef:
+        A DNSServiceRef returned by DNSServiceRegister().
+
+      flags:
+        Currently ignored, reserved for future use.
+
+      rrtype:
+        The type of the record (e.g. kDNSServiceType_TXT,
+        kDNSServiceType_SRV, etc.).
+
+      rdata:
+        A string containing the raw rdata to be contained in the added
+        resource record.
+
+      ttl:
+        The time to live of the resource record, in seconds.  Pass 0
+        to use a default value.
+
+      return value:
+        A DNSRecordRef instance, which may be passed to
+	DNSServiceUpdateRecord() or DNSServiceRemoveRecord().  If
+	sdRef is closed, the DNSRecordRef is also invalidated and may
+	not be used further.
+
+    """
+
     _NO_DEFAULT.check(rrtype)
     _NO_DEFAULT.check(rdata)
 
@@ -890,6 +1038,35 @@ def DNSServiceUpdateRecord(
     ttl = 0,
     ):
 
+    """
+
+    Update a registered resource record.  The record must either be:
+      - The primary txt record of a service registered via
+        DNSServiceRegister(), or
+      - A record added to a registered service via
+        DNSServiceAddRecord(), or
+      - An individual record registered by DNSServiceRegisterRecord()
+
+      sdRef:
+        A DNSServiceRef returned by DNSServiceRegister() or
+	DNSServiceCreateConnection().
+
+      RecordRef:
+        A DNSRecordRef returned by DNSServiceAddRecord(), or None to
+	update the service's primary txt record.
+
+      flags:
+        Currently ignored, reserved for future use.
+
+      rdata:
+        A string containing the new rdata to be contained in the
+        updated resource record.
+
+      ttl:
+        The time to live of the updated resource record, in seconds.
+
+    """
+
     _NO_DEFAULT.check(rdata)
 
     rdlen, rdata = _string_to_length_and_void_p(rdata)
@@ -907,6 +1084,27 @@ def DNSServiceRemoveRecord(
     RecordRef,
     flags = 0,
     ):
+
+    """
+
+    Remove a record previously added to a service record set via
+    DNSServiceAddRecord(), or deregister a record registered
+    individually via DNSServiceRegisterRecord().
+
+      sdRef:
+        A DNSServiceRef returned by DNSServiceRegister() (if the
+	record being removed was registered via DNSServiceAddRecord())
+	or by DNSServiceCreateConnection() (if the record being
+	removed was registered via DNSServiceRegisterRecord()).
+
+      recordRef:
+        A DNSRecordRef returned by DNSServiceAddRecord() or
+	DNSServiceRegisterRecord().
+
+      flags:
+        Currently ignored, reserved for future use.
+
+    """
 
     _DNSServiceRemoveRecord(sdRef,
 			    RecordRef,
