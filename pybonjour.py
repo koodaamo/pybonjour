@@ -39,7 +39,14 @@
 
 Pure-Python bindings for Apple's Bonjour library
 
+Say something about unicode here.
+
 """
+
+
+__author__   = 'Christopher Stawarz <cstawarz@csail.mit.edu>'
+__version__  = '1.0.0'
+__revision__ = '$Revision$'
 
 
 import ctypes
