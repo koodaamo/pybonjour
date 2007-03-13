@@ -1341,6 +1341,17 @@ def DNSServiceResolve(
 
 def DNSServiceCreateConnection():
 
+    """
+
+    Create a connection to the daemon allowing efficient registration
+    of multiple individual records.
+
+      return value:
+        A DNSServiceRef instance.  Closing it severs the connection
+	and deregisters all records registered on this connection.
+
+    """
+
     return _DNSServiceCreateConnection()
 
 
@@ -1355,6 +1366,77 @@ def DNSServiceRegisterRecord(
     ttl = 0,
     callBack = None,
     ):
+
+    """
+
+    Register an individual resource record on a connected
+    DNSServiceRef.
+
+    Note that name conflicts occurring for records registered via this
+    call must be handled by the client in the callback.
+
+      sdRef:
+        A DNSServiceRef returned by DNSServiceCreateConnection().
+
+      flags:
+        Possible values are kDNSServiceFlagsShared or
+        kDNSServiceFlagsUnique.
+
+      interfaceIndex:
+        If non-zero, specifies the interface on which to register the
+	record.  Passing kDNSServiceInterfaceIndexAny (0) causes the
+	record to be registered on all interfaces.
+
+      fullname:
+        The full domain name of the resource record.
+
+      rrtype:
+        The numerical type of the resource record
+        (e.g. kDNSServiceType_PTR, kDNSServiceType_SRV, etc.).
+
+      rrclass:
+        The class of the resource record (usually
+        kDNSServiceClass_IN).
+
+      rdata:
+        A string containing the raw rdata, as it is to appear in the
+        DNS record.
+
+      ttl:
+        The time to live of the resource record, in seconds.  Pass 0
+        to use a default value.
+
+      callBack:
+        The function to be called when a result is found, or if the
+	call asynchronously fails (e.g. because of a name conflict).
+	Its signature should be
+	callBack(sdRef, RecordRef, flags, errorCode).
+
+      return value:
+        A DNSRecordRef instance, which may be passed to
+	DNSServiceUpdateRecord() or DNSServiceRemoveRecord().  (To
+	deregister ALL records registered on a single connected
+	DNSServiceRef and deallocate each of their corresponding
+	DNSRecordRefs, close the DNSServiceRef.)
+
+    Callback Parameters:
+
+      sdRef:
+        The connected DNSServiceRef returned by
+	DNSServiceCreateConnection().
+
+      RecordRef:
+        The DNSRecordRef returned by DNSServiceRegisterRecord().
+
+      flags:
+        Currently unused, reserved for future use.
+
+      errorCode:
+        Will be kDNSServiceErr_NoError on success, otherwise will
+	indicate the failure that occurred (including name conflicts).
+	Other parameters are undefined if an error occurred.
+
+    """
 
     _NO_DEFAULT.check(fullname)
     _NO_DEFAULT.check(rrtype)
@@ -1393,6 +1475,84 @@ def DNSServiceQueryRecord(
     callBack = None,
     ):
 
+    """
+
+    Query for an arbitrary DNS record.
+
+      flags:
+        Pass kDNSServiceFlagsLongLivedQuery to create a "long-lived"
+	unicast query in a non-local domain.  Without setting this
+	flag, unicast queries will be one-shot; that is, only answers
+	available at the time of the call will be returned.  By
+	setting this flag, answers (including Add and Remove events)
+	that become available after the initial call is made will
+	generate callbacks.  This flag has no effect on link-local
+	multicast queries.
+
+      interfaceIndex:
+        If non-zero, specifies the interface on which to issue the
+	query.  Passing kDNSServiceInterfaceIndexAny (0) causes the
+	name to be queried for on all interfaces.
+
+      fullname:
+        The full domain name of the resource record to be queried for.
+
+      rrtype:
+        The numerical type of the resource record to be queried for
+	(e.g. kDNSServiceType_PTR, kDNSServiceType_SRV, etc.).
+
+      rrclass:
+        The class of the resource record (usually
+        kDNSServiceClass_IN).
+
+      callBack:
+        The function to be called when a result is found, or if the
+	call asynchronously fails.  Its signature should be
+	callBack(sdRef, flags, interfaceIndex, errorCode, fullname,
+	         rrtype, rrclass, rdata, ttl).
+
+      return value:
+        A DNSServiceRef instance.  The query operation will run
+	indefinitely until the client terminates it by closing the
+	DNSServiceRef.
+
+    Callback Parameters:
+
+      sdRef:
+        The DNSServiceRef returned by DNSServiceQueryRecord().
+
+      flags:
+        Possible values are kDNSServiceFlagsMoreComing and
+	kDNSServiceFlagsAdd.  The Add flag is NOT set for PTR records
+	with a ttl of 0, i.e. "Remove" events.
+
+      interfaceIndex:
+        The interface on which the query was resolved.
+
+      errorCode:
+        Will be kDNSServiceErr_NoError on success, otherwise will
+	indicate the failure that occurred.  Other parameters are
+	undefined if an error occurred.
+
+      fullname:
+        The resource record's full domain name.
+
+      rrtype:
+        The resource record's type (e.g. kDNSServiceType_PTR,
+        kDNSServiceType_SRV, etc.).
+
+      rrclass:
+        The class of the resource record (usually
+        kDNSServiceClass_IN).
+
+      rdata:
+        A string containing the raw rdata of the resource record.
+
+      ttl:
+        The resource record's time to live, in seconds.
+
+    """
+
     _NO_DEFAULT.check(fullname)
     _NO_DEFAULT.check(rrtype)
 
@@ -1422,6 +1582,38 @@ def DNSServiceReconfirmRecord(
     rdata = _NO_DEFAULT,
     ):
 
+    """
+
+    Instruct the daemon to verify the validity of a resource record
+    that appears to be out of date (e.g. because tcp connection to a
+    service's target failed).  Causes the record to be flushed from
+    the daemon's cache (as well as all other daemons' caches on the
+    network) if the record is determined to be invalid.
+
+      flags:
+        Currently unused, reserved for future use.
+
+      interfaceIndex: 
+        If non-zero, specifies the interface of the record in
+	question.  Passing kDNSServiceInterfaceIndexAny (0) causes all
+	instances of this record to be reconfirmed.
+
+      fullname:
+        The resource record's full domain name.
+
+      rrtype:
+        The resource record's type (e.g. kDNSServiceType_PTR,
+        kDNSServiceType_SRV, etc.).
+
+      rrclass:
+        The class of the resource record (usually
+        kDNSServiceClass_IN).
+
+      rdata:
+        A string containing the raw rdata of the resource record.
+
+    """
+
     _NO_DEFAULT.check(fullname)
     _NO_DEFAULT.check(rrtype)
     _NO_DEFAULT.check(rdata)
@@ -1443,12 +1635,37 @@ def DNSServiceConstructFullName(
     domain = _NO_DEFAULT,
     ):
 
+    """
+
+    Concatenate a three-part domain name (as returned by a callback
+    function) into a properly-escaped full domain name.  Note that
+    callback functions ALREADY ESCAPE strings where necessary.
+
+      service:
+        The service name; any dots or backslashes must NOT be escaped.
+	May be None (to construct a PTR record name, e.g.
+	"_ftp._tcp.apple.com.").
+
+      regtype:
+        The service type followed by the protocol, separated by a dot
+	(e.g. "_ftp._tcp").
+
+      domain:
+        The domain name, e.g. "apple.com.".  Literal dots or
+	backslashes, if any, must be escaped,
+	e.g. "1st\. Floor.apple.com."
+
+      return value:
+        The resulting full domain name.
+
+    """
+
     _NO_DEFAULT.check(regtype)
     _NO_DEFAULT.check(domain)
 
-    fullName = _DNSServiceConstructFullName(service, regtype, domain).value
+    fullName = _DNSServiceConstructFullName(service, regtype, domain)
 
-    return fullName.decode('utf-8')
+    return fullName.value.decode('utf-8')
 
 
 
