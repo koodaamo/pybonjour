@@ -328,11 +328,22 @@ class DNSServiceRef(DNSRecordRef):
     def __init__(self, *args, **kwargs):
 	DNSRecordRef.__init__(self, *args, **kwargs)
 
+	# Since callback functions are called asynchronously, we need
+	# to hold onto references to them for as long as they're in
+	# use.  Otherwise, Python could deallocate them before we call
+	# DNSServiceProcessResult(), meaning the Bonjour library would
+	# dereference freed memory when it tried to invoke the
+	# callback.
+	self._callbacks = []
+
 	# A DNSRecordRef is invalidated if DNSServiceRefDeallocate()
 	# is called on the corresponding DNSServiceRef, so we need to
 	# keep track of all our record refs and invalidate them when
 	# we're closed.
 	self._record_refs = []
+
+    def _add_callback(self, cb):
+	self._callbacks.append(cb)
 
     def _add_record_ref(self, ref):
 	self._record_refs.append(ref)
@@ -815,10 +826,14 @@ def DNSServiceEnumerateDomains(
 	    callBack(sdRef, flags, interfaceIndex, errorCode,
 		     replyDomain.decode())
 
-    return _DNSServiceEnumerateDomains(flags,
-				       interfaceIndex,
-				       _callback,
-				       None)
+    sdRef = _DNSServiceEnumerateDomains(flags,
+					interfaceIndex,
+					_callback,
+					None)
+
+    sdRef._add_callback(_callback)
+
+    return sdRef
 
 
 def DNSServiceRegister(
@@ -959,17 +974,21 @@ def DNSServiceRegister(
 	    callBack(sdRef, flags, errorCode, name.decode(), regtype.decode(),
 		     domain.decode())
 
-    return _DNSServiceRegister(flags,
-			       interfaceIndex,
-			       name,
-			       regtype,
-			       domain,
-			       host,
-			       port,
-			       txtLen,
-			       txtRecord,
-			       _callback,
-			       None)
+    sdRef = _DNSServiceRegister(flags,
+				interfaceIndex,
+				name,
+				regtype,
+				domain,
+				host,
+				port,
+				txtLen,
+				txtRecord,
+				_callback,
+				None)
+
+    sdRef._add_callback(_callback)
+
+    return sdRef
 
 
 def DNSServiceAddRecord(
@@ -1221,12 +1240,16 @@ def DNSServiceBrowse(
 		     serviceName.decode(), regtype.decode(),
 		     replyDomain.decode())
 
-    return _DNSServiceBrowse(flags,
-			     interfaceIndex,
-			     regtype,
-			     domain,
-			     _callback,
-			     None)
+    sdRef = _DNSServiceBrowse(flags,
+			      interfaceIndex,
+			      regtype,
+			      domain,
+			      _callback,
+			      None)
+
+    sdRef._add_callback(_callback)
+
+    return sdRef
 
 
 def DNSServiceResolve(
@@ -1338,13 +1361,17 @@ def DNSServiceResolve(
 	    callBack(sdRef, flags, interfaceIndex, errorCode, fullname.decode(),
 		     hosttarget.decode(), port, txtRecord)
 
-    return _DNSServiceResolve(flags,
-			      interfaceIndex,
-			      name,
-			      regtype,
-			      domain,
-			      _callback,
-			      None)
+    sdRef = _DNSServiceResolve(flags,
+			       interfaceIndex,
+			       name,
+			       regtype,
+			       domain,
+			       _callback,
+			       None)
+
+    sdRef._add_callback(_callback)
+
+    return sdRef
 
 
 def DNSServiceCreateConnection():
@@ -1469,6 +1496,7 @@ def DNSServiceRegisterRecord(
 					  _callback,
 					  None)
 
+    sdRef._add_callback(_callback)
     sdRef._add_record_ref(RecordRef)
 
     return RecordRef
@@ -1572,13 +1600,17 @@ def DNSServiceQueryRecord(
 	    callBack(sdRef, flags, interfaceIndex, errorCode, fullname.decode(),
 		     rrtype, rrclass, rdata, ttl)
 
-    return _DNSServiceQueryRecord(flags,
-				  interfaceIndex,
-				  fullname,
-				  rrtype,
-				  rrclass,
-				  _callback,
-				  None)
+    sdRef = _DNSServiceQueryRecord(flags,
+				   interfaceIndex,
+				   fullname,
+				   rrtype,
+				   rrclass,
+				   _callback,
+				   None)
+
+    sdRef._add_callback(_callback)
+
+    return sdRef
 
 
 def DNSServiceReconfirmRecord(
@@ -1765,16 +1797,6 @@ if __name__ == '__main__':
 	def test_register_browse_resolve(self):
 	    browse_done = threading.Event()
 	    resolve_done = threading.Event()
-
-	    def register_cb(sdRef, flags, errorCode, name, regtype, domain):
-		self.assertEqual(errorCode, kDNSServiceErr_NoError)
-		self.assertEqual(sdRef, register_sdRef)
-		self.assert_(isinstance(name, unicode))
-		self.assertEqual(name, self.service_name)
-		self.assert_(isinstance(regtype, unicode))
-		self.assertEqual(regtype, self.regtype)
-		self.assert_(isinstance(domain, unicode))
-		register_done.set()
 
 	    def browse_cb(sdRef, flags, interfaceIndex, errorCode, serviceName,
 			  regtype, replyDomain):
