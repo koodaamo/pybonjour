@@ -1907,32 +1907,22 @@ if __name__ == '__main__':
 	    sdRef = DNSServiceCreateConnection()
 
 	    try:
-		#
-		# FIXME:
-		#
-		# Obviously, I don't understand how to use these
-		# functions, as my tests either fail bizarrely or
-		# cause seg faults and the like.  Let's just punt for
-		# now...
-		#
-		RecordRef = DNSRecordRef()
+		RecordRef = \
+		    DNSServiceRegisterRecord(sdRef,
+					     kDNSServiceFlagsUnique,
+					     fullname=self.fullname,
+					     rrtype=kDNSServiceType_SINK,
+					     rdata='blah',
+					     callBack=cb)
+		self.assert_(RecordRef.value is not None)
 
-		#RecordRef = \
-		#    DNSServiceRegisterRecord(sdRef,
-		#			     kDNSServiceFlagsUnique,
-		#			     fullname=self.fullname,
-		#			     rrtype=kDNSServiceType_SINK,
-		#			     rdata='blah',
-		#			     callBack=cb)
-		#self.assert_(RecordRef.value is not None)
+		self.wait_on_event(sdRef, done)
 
-		#self.wait_on_event(sdRef, done)
+		self.query_record(kDNSServiceType_SINK, 'blah')
 
-		#self.query_record(kDNSServiceType_SINK, 'blah')
-
-		#DNSServiceReconfirmRecord(fullname=self.fullname,
-		#			  rrtype=kDNSServiceType_SINK,
-		#			  rdata='blah')
+		DNSServiceReconfirmRecord(fullname=self.fullname,
+					  rrtype=kDNSServiceType_SINK,
+					  rdata='blah')
 	    finally:
 		sdRef.close()
 
