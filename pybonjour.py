@@ -46,7 +46,7 @@ Say something about unicode here.
 
 __author__   = 'Christopher Stawarz <cstawarz@csail.mit.edu>'
 __version__  = '1.0.0'
-__revision__ = '$Revision$'
+__revision__ = int('$Revision$'.split()[1])
 
 
 import ctypes
@@ -645,8 +645,8 @@ def _create_function_bindings():
 
 	'DNSServiceReconfirmRecord':
 	(
-	    _DNSServiceErrorType,
-	    ERRCHECK,
+	    None,		# _DNSServiceErrorType in more recent versions
+	    NO_ERRCHECK,
 	    NO_OUTPARAM,
 	    (
 		_DNSServiceFlags,		# flags
