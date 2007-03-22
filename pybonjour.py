@@ -342,6 +342,12 @@ class DNSServiceRef(DNSRecordRef):
 	# we're closed.
 	self._record_refs = []
 
+    def __enter__(self):
+	return self
+
+    def __exit__(self, type, value, traceback):
+	self.close()
+
     def _add_callback(self, cb):
 	self._callbacks.append(cb)
 
