@@ -63,7 +63,7 @@ else:
     if sys.platform == 'darwin':
 	_libdnssd = 'libSystem.B.dylib'
     else:
-	_libdnssd = 'libdns_sd.so'
+	_libdnssd = 'libdns_sd.so.1'
 	# If libdns_sd is actually Avahi's Bonjour compatibility
 	# layer, silence its annoying warning messages
 	os.environ['AVAHI_COMPAT_NOWARN'] = '1'
