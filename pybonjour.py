@@ -37,7 +37,7 @@
 
 """
 
-Pure-Python bindings for Apple's Bonjour library
+Pure-Python interface to Apple Bonjour and compatible DNS-SD libraries
 
 Say something about unicode here.
 
@@ -209,6 +209,14 @@ kDNSServiceInterfaceIndexLocalOnly  = -1
 
 class BonjourError(Exception):
 
+    """
+
+    Exception representing an error returned by the DNS-SD library.
+    The errorCode attribute contains the actual integer error code
+    returned.
+
+    """
+
     _errmsg = {
 	kDNSServiceErr_NoSuchName:		'no such name',
 	kDNSServiceErr_NoMemory:		'no memory',
@@ -295,6 +303,18 @@ _DNSServiceErrorType = ctypes.c_int32
 
 class DNSRecordRef(ctypes.c_void_p):
 
+    """
+
+    A DNSRecordRef pointer.  DO NOT CREATE INSTANCES OF THIS CLASS!
+    Only instances returned by the DNS-SD library are valid.  Using
+    others will likely cause the Python interpreter to crash.
+
+    Application code should not use any of the methods of this class.
+    The only valid use of a DNSRecordRef instance is as an argument to
+    a DNS-SD function.
+
+    """
+
     @classmethod
     def from_param(cls, obj):
 	if type(obj) is not cls:
@@ -324,6 +344,41 @@ class _DNSRecordRef_or_null(DNSRecordRef):
 
 
 class DNSServiceRef(DNSRecordRef):
+
+    """
+
+    A DNSServiceRef pointer.  DO NOT CREATE INSTANCES OF THIS CLASS!
+    Only instances returned by the DNS-SD library are valid.  Using
+    others will likely cause the Python interpreter to crash.
+
+    An instance of this class represents an active connection to the
+    mDNS daemon.  The connection remains open until the close() method
+    is called (which also terminates the associated browse, resolve,
+    etc.).  Note that this method is *not* called automatically when
+    the instance is deallocated; therefore, application code must be
+    certain to call close() when the connection is no longer needed.
+
+    The primary use of a DNSServiceRef instance is in conjunction with
+    select() or poll() to determine when a response from the daemon is
+    available.  When the file descriptor returned by fileno() is ready
+    for reading, a reply from the daemon is available and should be
+    processed by passing the DNSServiceRef instance to
+    DNSServiceProcessResult(), which will invoke the appropriate
+    application callback function.  (Note that the file descriptor
+    should never be read from or written to directly.)
+
+    The DNSServiceRef class supports the context management protocol
+    introduced in Python 2.5, meaning applications can use the 'with'
+    statement to ensure that DNSServiceRef instances are closed
+    regardless of whether an exception occurs, e.g.
+
+      sdRef = DNSServiceBrowse(...)
+      with sdRef:
+          # sdRef will be closed regardless of how this block is
+          # exited
+	  ...
+
+    """
 
     def __init__(self, *args, **kwargs):
 	DNSRecordRef.__init__(self, *args, **kwargs)
@@ -355,6 +410,13 @@ class DNSServiceRef(DNSRecordRef):
 	self._record_refs.append(ref)
 
     def close(self):
+	"""
+
+	Close the connection to the mDNS daemon and terminate any
+	associated browse, resolve, etc. operations.
+
+	"""
+
 	if self._valid():
 	    for ref in self._record_refs:
 		ref._invalidate()
@@ -362,6 +424,15 @@ class DNSServiceRef(DNSRecordRef):
 	    self._invalidate()
 
     def fileno(self):
+	"""
+
+	Return the file descriptor associated with this connection.
+	This descriptor should never be read from or written to
+	directly.  It should only be passed to select() or poll() to
+	determine when a response from the mDNS daemon is available.
+
+	"""
+
 	return _DNSServiceRefSockFD(self)
 
 
@@ -747,7 +818,7 @@ def DNSServiceProcessResult(
 
     Read a reply from the daemon, calling the appropriate application
     callback.  This call will block until the daemon's response is
-    received.  Use sdRef in conjunction with a run loop or select() to
+    received.  Use sdRef in conjunction with select() or poll() to
     determine the presence of a response from the server before
     calling this function to process the reply without blocking.  Call
     this function at any point if it is acceptable to block until the
