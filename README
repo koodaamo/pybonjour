@@ -1,0 +1,3 @@
+To use this module with Python 2.4, you'll need to install ctypes
+1.0.1 or later.  Starting with Python 2.5, ctypes is part of the
+standard library, so no additional software is required.

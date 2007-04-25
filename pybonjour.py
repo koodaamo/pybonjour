@@ -26,18 +26,12 @@
 
 
 
-#
-# NOTE:
-#
-# To use this module with Python 2.4, you'll need to install ctypes
-# 1.0.1 or later.  Starting with Python 2.5, ctypes is part of the
-# standard library, so no additional software is required.
-#
-
-
 """
 
 Pure-Python interface to Apple Bonjour and compatible DNS-SD libraries
+
+pybonjour provides a pure-Python interface to Apple Bonjour and
+compatible DNS-SD libraries (such as Avahi).
 
 Say something about unicode here.
 
@@ -293,14 +287,6 @@ _DNSServiceFlags     = ctypes.c_uint32
 _DNSServiceErrorType = ctypes.c_int32
 
 
-#
-# FIXME:
-#
-# How do we prevent users from creating DNSRecordRef's and
-# DNSServiceRef's with random values?
-#
-
-
 class DNSRecordRef(ctypes.c_void_p):
 
     """
@@ -312,6 +298,9 @@ class DNSRecordRef(ctypes.c_void_p):
     Application code should not use any of the methods of this class.
     The only valid use of a DNSRecordRef instance is as an argument to
     a DNS-SD function.
+
+    To compare two DNSRecordRef instances for equality, use '=='
+    rather than 'is'.
 
     """
 
@@ -326,6 +315,9 @@ class DNSRecordRef(ctypes.c_void_p):
 
     def __eq__(self, other):
 	return ((type(other) is type(self)) and	(other.value == self.value))
+
+    def __ne__(self, other):
+	return not (other == self)
 
     def _invalidate(self):
 	self.value = None
@@ -377,6 +369,9 @@ class DNSServiceRef(DNSRecordRef):
           # sdRef will be closed regardless of how this block is
           # exited
 	  ...
+
+    To compare two DNSServiceRef instances for equality, use '=='
+    rather than 'is'.
 
     """
 
@@ -1756,7 +1751,7 @@ def DNSServiceConstructFullName(
 
     Concatenate a three-part domain name (as returned by a callback
     function) into a properly-escaped full domain name.  Note that
-    callback functions ALREADY ESCAPE strings where necessary.
+    callback functions already escape strings where necessary.
 
       service:
         The service name; any dots or backslashes must NOT be escaped.

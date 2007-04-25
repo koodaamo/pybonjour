@@ -41,9 +41,10 @@ setup(
     version = pybonjour.__version__,
     author = 'Christopher Stawarz',
     author_email = 'cstawarz@csail.mit.edu',
-    url = 'http://people.csail.mit.edu/cstawarz/pybonjour/',
+    url = 'http://o2s.csail.mit.edu/o2s-wiki/pybonjour',
     description = desc[0].strip(),
-    long_description = ('\n' + '\n\n'.join(desc[1:]).strip() + '\n'),
+    long_description = ('\n\n'.join(desc[1:]).strip()),
+    download_url = 'http://o2s.csail.mit.edu/download/pybonjour/',
     classifiers = [
 	'Development Status :: 5 - Production/Stable',
 	'Intended Audience :: Developers',
