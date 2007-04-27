@@ -30,10 +30,21 @@
 
 Pure-Python interface to Apple Bonjour and compatible DNS-SD libraries
 
-pybonjour provides a pure-Python interface to Apple Bonjour and
-compatible DNS-SD libraries (such as Avahi).
+pybonjour provides a pure-Python interface (via ctypes) to Apple
+Bonjour and compatible DNS-SD libraries (such as Avahi).  It allows
+Python scripts to take advantage of Zero Configuration Networking
+(Zeroconf) to register, discover, and resolve services on both local
+and wide-area networks.  Since pybonjour is implemented in pure
+Python, scripts that use it can easily be ported to Mac OS X, Windows,
+Linux, and other systems that run Bonjour.
 
-Say something about unicode here.
+Note on strings: Internally, all strings used in DNS-SD are UTF-8
+strings.  String arguments passed to the DNS-SD functions provided by
+pybonjour must be either unicode instances or str instances that can
+be converted to unicode using the default encoding.  (Passing a
+non-convertible str will result in an exception.)  Strings returned
+from pybonjour (either directly from API functions or passed to
+application callbacks) are always unicode instances.
 
 """
 
@@ -415,8 +426,10 @@ class DNSServiceRef(DNSRecordRef):
 	if self._valid():
 	    for ref in self._record_refs:
 		ref._invalidate()
+	    del self._record_refs
 	    _DNSServiceRefDeallocate(self)
 	    self._invalidate()
+	    del self._callbacks
 
     def fileno(self):
 	"""
