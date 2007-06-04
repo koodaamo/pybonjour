@@ -50,12 +50,13 @@ application callbacks) are always unicode instances.
 
 
 __author__   = 'Christopher Stawarz <cstawarz@csail.mit.edu>'
-__version__  = '1.0.0'
+__version__  = '1.1.0'
 __revision__ = int('$Revision$'.split()[1])
 
 
 import ctypes
 import os
+import re
 import socket
 import sys
 
@@ -1791,6 +1792,111 @@ def DNSServiceConstructFullName(
     fullName = _DNSServiceConstructFullName(service, regtype, domain)
 
     return fullName.value.decode('utf-8')
+
+
+
+################################################################################
+#
+# TXTRecord class
+#
+################################################################################
+
+
+
+class TXTRecord(object):
+
+    def __init__(self, strict=True):
+        self.strict = strict
+        self._names = []
+        self._items = {}
+
+    # Require one or more printable ASCII characters (0x20-0x7E),
+    # excluding '=' (0x3D)
+    _valid_name_re = re.compile(r'^[ -<>-~]+$')
+
+    @staticmethod
+    def is_valid_name(name):
+        return (TXTRecord._valid_name_re.match(name) is not None)
+
+    def __contains__(self, name):
+        return (name.lower() in self._items)
+
+    def __iter__(self):
+        for name in self._names:
+            yield self._items[name]
+
+    def __len__(self):
+        return len(self._names)
+
+    def __nonzero__(self):
+        return bool(self._items)
+
+    def __str__(self):
+        if not self:
+            return '\0'
+
+        parts = []
+        for name, value in self:
+            if value is None:
+                item = name
+            else:
+                item = '%s=%s' % (name, value)
+            if (not self.strict) and (len(item) > 255):
+                item = item[:256]
+            parts.append(chr(len(item)))
+            parts.append(item)
+
+        return ''.join(parts)
+
+    def __getitem__(self, name):
+        return self._items[name.lower()][1]
+
+    def __setitem__(self, name, value):
+        stored_name = name
+        name = name.lower()
+        length = len(name)
+
+        if value is not None:
+            if isinstance(value, unicode):
+                value = value.encode('utf-8')
+            else:
+                value = str(value)
+            length += 1 + len(value)
+
+        if self.strict and (length > 255):
+            raise ValueError('name=value string must be 255 bytes or less')
+
+        if name not in self._items:
+            if self.strict and (not self.is_valid_name(stored_name)):
+                raise ValueError("invalid name: '%s'" % stored_name)
+            self._names.append(name)
+
+        self._items[name] = (stored_name, value)
+
+    def __delitem__(self, name):
+        name = name.lower()
+        del self._items[name]
+        self._names.remove(name)
+
+    @classmethod
+    def parse(cls, data, strict=False):
+        txt = cls(strict)
+
+        while data:
+            length = ord(data[0])
+            record = data[1:length+1].split('=', 1)
+
+            # Add the record only if the name is non-empty and there
+            # are no existing records with the same name
+            if record[0] and (record[0] not in txt):
+                if len(record) == 1:
+                    txt[record[0]] = None
+                else:
+                    txt[record[0]] = record[1]
+
+            data = data[length+1:]
+
+        return txt
 
 
 
