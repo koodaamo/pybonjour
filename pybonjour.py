@@ -777,6 +777,7 @@ def _create_function_bindings():
 
 # Only need to do this once
 _create_function_bindings()
+del _create_function_bindings
 
 
 
@@ -801,6 +802,8 @@ _NO_DEFAULT = _NoDefault()
 
 
 def _string_to_length_and_void_p(string):
+    if isinstance(string, TXTRecord):
+        string = str(string)
     void_p = ctypes.cast(ctypes.c_char_p(string), ctypes.c_void_p)
     return len(string), void_p
 
@@ -990,9 +993,10 @@ def DNSServiceRegister(
         placeholder services.
 
       txtRecord:
-        The TXT record rdata.  If not None, txtRecord MUST be a string
-        containing a properly formatted DNS TXT record, i.e.
-        <length	byte> <data> <length byte> <data> ...
+        The TXT record rdata.  If not None, txtRecord must be either a
+        TXTRecord instance or a string containing a properly formatted
+        DNS TXT record, i.e.
+        <length byte> <data> <length byte> <data> ...
 
       callBack:
         The function to be called when the registration completes or
@@ -1805,6 +1809,15 @@ def DNSServiceConstructFullName(
 
 class TXTRecord(object):
 
+    """
+
+    Note that in addition to being valid as a txtRecord parameter to
+    DNSServiceRegister(), a TXTRecord instance can be used in place of
+    a resource record data string (i.e. rdata parameter) in any
+    function that accepts one.
+
+    """
+
     def __init__(self, strict=True):
         self.strict = strict
         self._names = []
@@ -1978,9 +1991,13 @@ if __name__ == '__main__':
                 self.assert_(isinstance(domain, unicode))
                 done.set()
 
+            txt = TXTRecord()
+            txt['foo'] = 'foobar'
+
             sdRef = DNSServiceRegister(name=self.service_name,
                                        regtype=self.regtype,
                                        port=self.port,
+                                       txtRecord=txt,
                                        callBack=cb)
 
             return done, sdRef
@@ -2009,6 +2026,7 @@ if __name__ == '__main__':
                     self.assert_(isinstance(hosttarget, unicode))
                     self.assertEqual(port, self.port)
                     self.assert_(isinstance(txtRecord, str))
+                    self.assertEqual(str(txtRecord), '\nfoo=foobar')
                     self.assert_(len(txtRecord) > 0)
                     resolve_done.set()
 
@@ -2118,6 +2136,52 @@ if __name__ == '__main__':
                 sdRef.close()
 
             self.assert_(RecordRef.value is None)
+
+        def test_txtrecord(self):
+            txt = TXTRecord()
+
+            self.assertEqual(len(txt), 0)
+            self.assert_(not txt)
+            self.assertEqual(str(txt), '\0')
+
+            txt['foo'] = 'bar'
+            self.assertEqual(txt['foo'], 'bar')
+            txt['baz'] = u'buzz'
+            self.assertEqual(txt['BaZ'], 'buzz')
+            txt['none'] = None
+            self.assert_(txt['none'] is None)
+            txt['empty'] = ''
+            self.assertEqual(txt['empty'], '')
+ 
+            self.assert_('foo' in txt)
+            self.assert_('foozy' not in txt)
+ 
+            self.assertEqual(len(txt), 4)
+            self.assert_(txt)
+            self.assertEqual(str(txt), str(TXTRecord.parse(str(txt))))
+
+            txt['baZ'] = 'fuzz'
+            self.assertEqual(txt['baz'], 'fuzz')
+            self.assertEqual(len(txt), 4)
+
+            self.assertRaises(KeyError, txt.__getitem__, 'not_a_key')
+            self.assertRaises(KeyError, txt.__delitem__, 'not_a_key')
+            self.assertRaises(ValueError, txt.__setitem__, 'foo\0', 'bar')
+            self.assertRaises(ValueError, txt.__setitem__, '', 'bar')
+            self.assertRaises(ValueError, txt.__setitem__, 'foo', 252 * 'b')
+
+            # Example from
+            # http://files.dns-sd.org/draft-cheshire-dnsext-dns-sd.txt
+            data = '\x0Aname=value\x08paper=A4\x0EDNS-SD Is Cool'
+            txt = TXTRecord.parse(data)
+            self.assertEqual(str(txt), data)
+            self.assert_(txt['DNS-SD Is Cool'] is None)
+
+            data = '\x04bar=\nfoo=foobar\nfoo=barfoo\n=foofoobar'
+            txt = TXTRecord.parse(data)
+            self.assertEqual(len(txt), 2)
+            self.assertEqual(txt['bar'], '')
+            self.assertEqual(str(txt), '\x04bar=\nfoo=foobar')
 
 
     unittest.main()
