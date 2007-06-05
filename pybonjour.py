@@ -1813,38 +1813,38 @@ class TXTRecord(object):
 
     Note that in addition to being valid as a txtRecord parameter to
     DNSServiceRegister(), a TXTRecord instance can be used in place of
-    a resource record data string (i.e. rdata parameter) in any
+    a resource record data string (i.e. rdata parameter) with any
     function that accepts one.
 
     """
 
-    def __init__(self, strict=True):
+    def __init__(self, items={}, strict=True):
         self.strict = strict
         self._names = []
         self._items = {}
 
-    # Require one or more printable ASCII characters (0x20-0x7E),
-    # excluding '=' (0x3D)
-    _valid_name_re = re.compile(r'^[ -<>-~]+$')
-
-    @staticmethod
-    def is_valid_name(name):
-        return (TXTRecord._valid_name_re.match(name) is not None)
+        for name, value in items.iteritems():
+            self[name] = value
 
     def __contains__(self, name):
         return (name.lower() in self._items)
 
     def __iter__(self):
+        'Return an iterator over name/value pairs'
         for name in self._names:
             yield self._items[name]
 
     def __len__(self):
+        'Return the number of name/value pairs'
         return len(self._names)
 
     def __nonzero__(self):
+        'Return False if the record is empty, True otherwise'
         return bool(self._items)
 
     def __str__(self):
+        'Return the wire representation of the TXT record as a string'
+
         if not self:
             return '\0'
 
@@ -1855,7 +1855,7 @@ class TXTRecord(object):
             else:
                 item = '%s=%s' % (name, value)
             if (not self.strict) and (len(item) > 255):
-                item = item[:256]
+                item = item[:255]
             parts.append(chr(len(item)))
             parts.append(item)
 
@@ -1863,6 +1863,10 @@ class TXTRecord(object):
 
     def __getitem__(self, name):
         return self._items[name.lower()][1]
+
+    # Require one or more printable ASCII characters (0x20-0x7E),
+    # excluding '=' (0x3D)
+    _valid_name_re = re.compile(r'^[ -<>-~]+$')
 
     def __setitem__(self, name, value):
         stored_name = name
@@ -1880,7 +1884,7 @@ class TXTRecord(object):
             raise ValueError('name=value string must be 255 bytes or less')
 
         if name not in self._items:
-            if self.strict and (not self.is_valid_name(stored_name)):
+            if self.strict and (self._valid_name_re.match(stored_name) is None):
                 raise ValueError("invalid name: '%s'" % stored_name)
             self._names.append(name)
 
@@ -1893,19 +1897,19 @@ class TXTRecord(object):
 
     @classmethod
     def parse(cls, data, strict=False):
-        txt = cls(strict)
+        txt = cls(strict=strict)
 
         while data:
             length = ord(data[0])
-            record = data[1:length+1].split('=', 1)
+            item = data[1:length+1].split('=', 1)
 
-            # Add the record only if the name is non-empty and there
-            # are no existing records with the same name
-            if record[0] and (record[0] not in txt):
-                if len(record) == 1:
-                    txt[record[0]] = None
+            # Add the item only if the name is non-empty and there are
+            # no existing items with the same name
+            if item[0] and (item[0] not in txt):
+                if len(item) == 1:
+                    txt[item[0]] = None
                 else:
-                    txt[record[0]] = record[1]
+                    txt[item[0]] = item[1]
 
             data = data[length+1:]
 
@@ -2139,22 +2143,18 @@ if __name__ == '__main__':
 
         def test_txtrecord(self):
             txt = TXTRecord()
-
             self.assertEqual(len(txt), 0)
             self.assert_(not txt)
             self.assertEqual(str(txt), '\0')
 
-            txt['foo'] = 'bar'
+            txt = TXTRecord({'foo': 'bar',
+                             'baz': u'buzz',
+                             'none': None,
+                             'empty': ''})
             self.assertEqual(txt['foo'], 'bar')
-            txt['baz'] = u'buzz'
             self.assertEqual(txt['BaZ'], 'buzz')
-            txt['none'] = None
             self.assert_(txt['none'] is None)
-            txt['empty'] = ''
             self.assertEqual(txt['empty'], '')
- 
-            self.assert_('foo' in txt)
-            self.assert_('foozy' not in txt)
  
             self.assertEqual(len(txt), 4)
             self.assert_(txt)
@@ -2163,6 +2163,10 @@ if __name__ == '__main__':
             txt['baZ'] = 'fuzz'
             self.assertEqual(txt['baz'], 'fuzz')
             self.assertEqual(len(txt), 4)
+ 
+            self.assert_('foo' in txt)
+            del txt['foo']
+            self.assert_('foo' not in txt)
 
             self.assertRaises(KeyError, txt.__getitem__, 'not_a_key')
             self.assertRaises(KeyError, txt.__delitem__, 'not_a_key')
@@ -2182,6 +2186,12 @@ if __name__ == '__main__':
             self.assertEqual(len(txt), 2)
             self.assertEqual(txt['bar'], '')
             self.assertEqual(str(txt), '\x04bar=\nfoo=foobar')
+
+            value = 254 * 'y'
+            self.assertRaises(ValueError, TXTRecord().__setitem__, 'x', value)
+            txt = TXTRecord(strict=False)
+            txt['x'] = value
+            self.assertEqual(len(str(txt)), 256)
 
 
     unittest.main()
