@@ -1811,6 +1811,15 @@ class TXTRecord(object):
 
     """
 
+    A mapping representing a DNS TXT record.  The TXT record's
+    name=value entries are stored as key/value pairs in the mapping.
+    Although keys can be accessed in a case-insensitive fashion
+    (meaning txt['foo'] and txt['FoO'] refer to the same value), key
+    case is preserved in the wire representation of the record (so
+    txt['FoO'] = 'bar' will generate a FoO=bar entry in the TXT
+    record).  Key order is also preserved, so keys appear in the wire
+    format in the order in which they were created.
+
     Note that in addition to being valid as a txtRecord parameter to
     DNSServiceRegister(), a TXTRecord instance can be used in place of
     a resource record data string (i.e. rdata parameter) with any
@@ -1819,6 +1828,17 @@ class TXTRecord(object):
     """
 
     def __init__(self, items={}, strict=True):
+        """
+
+        Create a new TXTRecord instance, initializing it with the
+        contents of items.  If strict is true, then strict conformance
+        to the DNS TXT record format will be enforced, and attempts to
+        add a name containing invalid characters or a name/value pair
+        whose wire representation is longer than 255 bytes will raise
+        a ValueError exception.
+
+        """
+
         self.strict = strict
         self._names = []
         self._items = {}
@@ -1827,6 +1847,7 @@ class TXTRecord(object):
             self[name] = value
 
     def __contains__(self, name):
+        'Return True if name is a key in the record, False otherwise'
         return (name.lower() in self._items)
 
     def __iter__(self):
@@ -1843,7 +1864,14 @@ class TXTRecord(object):
         return bool(self._items)
 
     def __str__(self):
-        'Return the wire representation of the TXT record as a string'
+        """
+
+        Return the wire representation of the TXT record as a string.
+        If self.strict is false, any name/value pair whose wire length
+        if greater than 255 bytes will be truncated to 255 bytes.  If
+        the record is empty, '\\0' is returned.
+
+        """
 
         if not self:
             return '\0'
@@ -1862,6 +1890,14 @@ class TXTRecord(object):
         return ''.join(parts)
 
     def __getitem__(self, name):
+        """
+
+        Return the value associated with name.  The value is either
+        None (meaning name has no associated value) or an str instance
+        (which may be of length 0).  Raises KeyError if name is not a
+        key.
+
+        """
         return self._items[name.lower()][1]
 
     # Require one or more printable ASCII characters (0x20-0x7E),
@@ -1869,6 +1905,15 @@ class TXTRecord(object):
     _valid_name_re = re.compile(r'^[ -<>-~]+$')
 
     def __setitem__(self, name, value):
+        """
+
+        Add a name/value pair to the record.  If value is None, then
+        name will have no associated value.  If value is a unicode
+        instance, it will be encoded as a UTF-8 string.  Otherwise,
+        value will be converted to an str instance.
+
+        """
+
         stored_name = name
         name = name.lower()
         length = len(name)
@@ -1891,12 +1936,26 @@ class TXTRecord(object):
         self._items[name] = (stored_name, value)
 
     def __delitem__(self, name):
+        """
+
+        Remove name and its corresponding value from the record.
+        Raises KeyError if name is not a key.
+
+        """
         name = name.lower()
         del self._items[name]
         self._names.remove(name)
 
     @classmethod
     def parse(cls, data, strict=False):
+        """
+
+        Given a string data containing the wire representation of a
+        DNS TXT record, parse it and return a TXTRecord instance.  The
+        strict parameter is passed to the TXTRecord constructor.
+
+        """
+
         txt = cls(strict=strict)
 
         while data:
@@ -2030,7 +2089,7 @@ if __name__ == '__main__':
                     self.assert_(isinstance(hosttarget, unicode))
                     self.assertEqual(port, self.port)
                     self.assert_(isinstance(txtRecord, str))
-                    self.assertEqual(str(txtRecord), '\nfoo=foobar')
+                    self.assertEqual(txtRecord, '\nfoo=foobar')
                     self.assert_(len(txtRecord) > 0)
                     resolve_done.set()
 
