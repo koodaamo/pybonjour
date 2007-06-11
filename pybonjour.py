@@ -2089,7 +2089,8 @@ if __name__ == '__main__':
                     self.assert_(isinstance(hosttarget, unicode))
                     self.assertEqual(port, self.port)
                     self.assert_(isinstance(txtRecord, str))
-                    self.assertEqual(txtRecord, '\nfoo=foobar')
+                    txt = TXTRecord.parse(txtRecord)
+                    self.assertEqual(txt['foo'], 'foobar')
                     self.assert_(len(txtRecord) > 0)
                     resolve_done.set()
 
