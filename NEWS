@@ -1,0 +1,4 @@
+1.1.0 (2007-06-14)
+------------------
+
+* Added TXTRecord class for generating and parsing DNS TXT records

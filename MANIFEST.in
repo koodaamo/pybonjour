@@ -1,1 +1,2 @@
+include NEWS
 recursive-include examples *.py
