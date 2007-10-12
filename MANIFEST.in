@@ -1,2 +1,3 @@
 include NEWS
+include test_pybonjour.py
 recursive-include examples *.py
