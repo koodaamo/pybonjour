@@ -50,7 +50,7 @@ application callbacks) are always unicode instances.
 
 
 __author__   = 'Christopher Stawarz <cstawarz@csail.mit.edu>'
-__version__  = '1.1.0'
+__version__  = '1.2.0'
 __revision__ = int('$Revision$'.split()[1])
 
 
@@ -59,6 +59,28 @@ import os
 import re
 import socket
 import sys
+
+
+
+################################################################################
+#
+# Global setup
+#
+################################################################################
+
+
+
+class _DummyLock(object):
+
+    @staticmethod
+    def acquire():
+        pass
+
+    @staticmethod
+    def release():
+        pass
+
+_global_lock = _DummyLock()
 
 
 if sys.platform == 'win32':
@@ -70,9 +92,20 @@ else:
         _libdnssd = 'libSystem.B.dylib'
     else:
         _libdnssd = 'libdns_sd.so.1'
+
         # If libdns_sd is actually Avahi's Bonjour compatibility
-        # layer, silence its annoying warning messages
-        os.environ['AVAHI_COMPAT_NOWARN'] = '1'
+        # layer, silence its annoying warning messages, and use a real
+        # RLock as the global lock, since the compatibility layer
+        # isn't thread safe.
+        try:
+            ctypes.cdll.LoadLibrary('libavahi-client.so.3')
+        except OSError:
+            pass
+        else:
+            os.environ['AVAHI_COMPAT_NOWARN'] = '1'
+            import threading
+            _global_lock = threading.RLock()
+
     _libdnssd = ctypes.cdll.LoadLibrary(_libdnssd)
     _CFunc = ctypes.CFUNCTYPE
 
@@ -428,7 +461,13 @@ class DNSServiceRef(DNSRecordRef):
             for ref in self._record_refs:
                 ref._invalidate()
             del self._record_refs
-            _DNSServiceRefDeallocate(self)
+
+            _global_lock.acquire()
+            try:
+                _DNSServiceRefDeallocate(self)
+            finally:
+                _global_lock.release()
+
             self._invalidate()
             del self._callbacks
 
@@ -442,7 +481,13 @@ class DNSServiceRef(DNSRecordRef):
 
         """
 
-        return _DNSServiceRefSockFD(self)
+        _global_lock.acquire()
+        try:
+            fd = _DNSServiceRefSockFD(self)
+        finally:
+            _global_lock.release()
+
+        return fd
 
 
 _DNSServiceDomainEnumReply = _CFunc(
@@ -846,7 +891,11 @@ def DNSServiceProcessResult(
 
     """
 
-    _DNSServiceProcessResult(sdRef)
+    _global_lock.acquire()
+    try:
+        _DNSServiceProcessResult(sdRef)
+    finally:
+        _global_lock.release()
 
 
 def DNSServiceEnumerateDomains(
@@ -915,10 +964,14 @@ def DNSServiceEnumerateDomains(
             callBack(sdRef, flags, interfaceIndex, errorCode,
                      replyDomain.decode())
 
-    sdRef = _DNSServiceEnumerateDomains(flags,
-                                        interfaceIndex,
-                                        _callback,
-                                        None)
+    _global_lock.acquire()
+    try:
+        sdRef = _DNSServiceEnumerateDomains(flags,
+                                            interfaceIndex,
+                                            _callback,
+                                            None)
+    finally:
+        _global_lock.release()
 
     sdRef._add_callback(_callback)
 
@@ -1064,17 +1117,21 @@ def DNSServiceRegister(
             callBack(sdRef, flags, errorCode, name.decode(), regtype.decode(),
                      domain.decode())
 
-    sdRef = _DNSServiceRegister(flags,
-                                interfaceIndex,
-                                name,
-                                regtype,
-                                domain,
-                                host,
-                                port,
-                                txtLen,
-                                txtRecord,
-                                _callback,
-                                None)
+    _global_lock.acquire()
+    try:
+        sdRef = _DNSServiceRegister(flags,
+                                    interfaceIndex,
+                                    name,
+                                    regtype,
+                                    domain,
+                                    host,
+                                    port,
+                                    txtLen,
+                                    txtRecord,
+                                    _callback,
+                                    None)
+    finally:
+        _global_lock.release()
 
     sdRef._add_callback(_callback)
 
@@ -1135,12 +1192,16 @@ def DNSServiceAddRecord(
 
     rdlen, rdata = _string_to_length_and_void_p(rdata)
 
-    RecordRef = _DNSServiceAddRecord(sdRef,
-                                     flags,
-                                     rrtype,
-                                     rdlen,
-                                     rdata,
-                                     ttl)
+    _global_lock.acquire()
+    try:
+        RecordRef = _DNSServiceAddRecord(sdRef,
+                                         flags,
+                                         rrtype,
+                                         rdlen,
+                                         rdata,
+                                         ttl)
+    finally:
+        _global_lock.release()
 
     sdRef._add_record_ref(RecordRef)
 
@@ -1188,12 +1249,16 @@ def DNSServiceUpdateRecord(
 
     rdlen, rdata = _string_to_length_and_void_p(rdata)
 
-    _DNSServiceUpdateRecord(sdRef,
-                            RecordRef,
-                            flags,
-                            rdlen,
-                            rdata,
-                            ttl)
+    _global_lock.acquire()
+    try:
+        _DNSServiceUpdateRecord(sdRef,
+                                RecordRef,
+                                flags,
+                                rdlen,
+                                rdata,
+                                ttl)
+    finally:
+        _global_lock.release()
 
 
 def DNSServiceRemoveRecord(
@@ -1223,9 +1288,13 @@ def DNSServiceRemoveRecord(
 
     """
 
-    _DNSServiceRemoveRecord(sdRef,
-                            RecordRef,
-                            flags)
+    _global_lock.acquire()
+    try:
+        _DNSServiceRemoveRecord(sdRef,
+                                RecordRef,
+                                flags)
+    finally:
+        _global_lock.release()
 
     RecordRef._invalidate()
 
@@ -1330,12 +1399,16 @@ def DNSServiceBrowse(
                      serviceName.decode(), regtype.decode(),
                      replyDomain.decode())
 
-    sdRef = _DNSServiceBrowse(flags,
-                              interfaceIndex,
-                              regtype,
-                              domain,
-                              _callback,
-                              None)
+    _global_lock.acquire()
+    try:
+        sdRef = _DNSServiceBrowse(flags,
+                                  interfaceIndex,
+                                  regtype,
+                                  domain,
+                                  _callback,
+                                  None)
+    finally:
+        _global_lock.release()
 
     sdRef._add_callback(_callback)
 
@@ -1451,13 +1524,17 @@ def DNSServiceResolve(
             callBack(sdRef, flags, interfaceIndex, errorCode, fullname.decode(),
                      hosttarget.decode(), port, txtRecord)
 
-    sdRef = _DNSServiceResolve(flags,
-                               interfaceIndex,
-                               name,
-                               regtype,
-                               domain,
-                               _callback,
-                               None)
+    _global_lock.acquire()
+    try:
+        sdRef = _DNSServiceResolve(flags,
+                                   interfaceIndex,
+                                   name,
+                                   regtype,
+                                   domain,
+                                   _callback,
+                                   None)
+    finally:
+        _global_lock.release()
 
     sdRef._add_callback(_callback)
 
@@ -1477,7 +1554,13 @@ def DNSServiceCreateConnection():
 
     """
 
-    return _DNSServiceCreateConnection()
+    _global_lock.acquire()
+    try:
+        sdRef = _DNSServiceCreateConnection()
+    finally:
+        _global_lock.release()
+
+    return sdRef
 
 
 def DNSServiceRegisterRecord(
@@ -1574,17 +1657,21 @@ def DNSServiceRegisterRecord(
         if callBack is not None:
             callBack(sdRef, RecordRef, flags, errorCode)
 
-    RecordRef = _DNSServiceRegisterRecord(sdRef,
-                                          flags,
-                                          interfaceIndex,
-                                          fullname,
-                                          rrtype,
-                                          rrclass,
-                                          rdlen,
-                                          rdata,
-                                          ttl,
-                                          _callback,
-                                          None)
+    _global_lock.acquire()
+    try:
+        RecordRef = _DNSServiceRegisterRecord(sdRef,
+                                              flags,
+                                              interfaceIndex,
+                                              fullname,
+                                              rrtype,
+                                              rrclass,
+                                              rdlen,
+                                              rdata,
+                                              ttl,
+                                              _callback,
+                                              None)
+    finally:
+        _global_lock.release()
 
     sdRef._add_callback(_callback)
     sdRef._add_record_ref(RecordRef)
@@ -1690,13 +1777,17 @@ def DNSServiceQueryRecord(
             callBack(sdRef, flags, interfaceIndex, errorCode, fullname.decode(),
                      rrtype, rrclass, rdata, ttl)
 
-    sdRef = _DNSServiceQueryRecord(flags,
-                                   interfaceIndex,
-                                   fullname,
-                                   rrtype,
-                                   rrclass,
-                                   _callback,
-                                   None)
+    _global_lock.acquire()
+    try:
+        sdRef = _DNSServiceQueryRecord(flags,
+                                       interfaceIndex,
+                                       fullname,
+                                       rrtype,
+                                       rrclass,
+                                       _callback,
+                                       None)
+    finally:
+        _global_lock.release()
 
     sdRef._add_callback(_callback)
 
@@ -1750,13 +1841,17 @@ def DNSServiceReconfirmRecord(
 
     rdlen, rdata = _string_to_length_and_void_p(rdata)
 
-    _DNSServiceReconfirmRecord(flags,
-                               interfaceIndex,
-                               fullname,
-                               rrtype,
-                               rrclass,
-                               rdlen,
-                               rdata)
+    _global_lock.acquire()
+    try:
+        _DNSServiceReconfirmRecord(flags,
+                                   interfaceIndex,
+                                   fullname,
+                                   rrtype,
+                                   rrclass,
+                                   rdlen,
+                                   rdata)
+    finally:
+        _global_lock.release()
 
 
 def DNSServiceConstructFullName(
@@ -1793,7 +1888,11 @@ def DNSServiceConstructFullName(
     _NO_DEFAULT.check(regtype)
     _NO_DEFAULT.check(domain)
 
-    fullName = _DNSServiceConstructFullName(service, regtype, domain)
+    _global_lock.acquire()
+    try:
+        fullName = _DNSServiceConstructFullName(service, regtype, domain)
+    finally:
+        _global_lock.release()
 
     return fullName.value.decode('utf-8')
 
