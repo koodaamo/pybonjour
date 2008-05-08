@@ -2,8 +2,8 @@
 pybonjour:  Pure-Python interface to Apple Bonjour
 
 Author: Christopher Stawarz <cstawarz@csail.mit.edu>
-Version: 1.1.0
-June 14, 2007
+Version: 1.1.1
+May 8, 2008
 ----------------------------------------------------
 
 

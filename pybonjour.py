@@ -1,6 +1,6 @@
 ################################################################################
 #
-# Copyright (c) 2007 Christopher J. Stawarz
+# Copyright (c) 2007-2008 Christopher J. Stawarz
 #
 # Permission is hereby granted, free of charge, to any person
 # obtaining a copy of this software and associated documentation files
@@ -50,7 +50,7 @@ application callbacks) are always unicode instances.
 
 
 __author__   = 'Christopher Stawarz <cstawarz@csail.mit.edu>'
-__version__  = '1.2.0'
+__version__  = '1.1.1'
 __revision__ = int('$Revision$'.split()[1])
 
 
