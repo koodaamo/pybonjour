@@ -49,7 +49,7 @@ application callbacks) are always unicode instances.
 """
 
 
-__author__   = 'Christopher Stawarz <cstawarz@csail.mit.edu>'
+__author__   = 'Christopher Stawarz <cstawarz@gmail.com>'
 __version__  = '1.1.1'
 
 
