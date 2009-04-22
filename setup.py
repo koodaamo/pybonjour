@@ -44,7 +44,7 @@ setup(
     url = 'http://code.google.com/p/pybonjour/',
     description = desc[0].strip(),
     long_description = desc[1].strip(),
-    download_url = 'http://code.google.com/p/pybonjour/downloads/list',
+    download_url = 'http://code.google.com/p/pybonjour/downloads/list?can=1',
     classifiers = [
         'Development Status :: 5 - Production/Stable',
         'Intended Audience :: Developers',
